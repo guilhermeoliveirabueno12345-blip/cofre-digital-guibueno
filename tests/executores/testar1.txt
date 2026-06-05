@@ -1,1 +1,2 @@
 Provocando a execução do workflow até o fim com os testes.
+como o workflow anterior nao conseguia terminar fiz alteraçõs com um scroit bash que sera executado automaticamente.
