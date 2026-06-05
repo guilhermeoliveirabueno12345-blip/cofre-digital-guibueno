@@ -165,3 +165,5 @@ com testes, build, deploy, simulação, automação e boas práticas.
 
 Este README é o seu certificado técnico informal:
 prova de que você entende CI/CD de verdade.
+
+-- Esta edição do arquivo readme.md é proposital apenas para testar a sincronização do git com o github
