@@ -1,56 +1,90 @@
-name: Deploy Cofre Digital
-
+name: Cofre Digital - Deploy Automatizado
 on:
   push:
-    branches:
-      - main
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  IMAGE_NAME: cofre-digital-app
 
 jobs:
-  build-and-deploy:
+  build:
+    name: Construir Container Image
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout código
+      - name: Checkout do código
         uses: actions/checkout@v4
 
-      - name: Configurar Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
+      # --- Fluxo real com Docker Hub (comentado para fins didáticos) ---
+      # - name: Build da imagem Docker
+      #   run: |
+      #     docker build -t cofre-digital:latest -f docker/Dockerfile .
+      #
+      # - name: Login no Docker Hub
+      #   run: |
+      #     echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+      #
+      # - name: Push da imagem para o Docker Hub
+      #   run: |
+      #     docker tag cofre-digital:latest ${{ secrets.DOCKER_USERNAME }}/cofre-digital:latest
+      #     docker push ${{ secrets.DOCKER_USERNAME }}/cofre-digital:latest
 
-      - name: Instalar dependências
+      # --- Versão simplificada para simulação ---
+      - name: Build da imagem (sem push)
         run: |
-          pip install -r app/requirements.txt
+          echo "Construindo imagem localmente..."
+          echo "Imagem: $IMAGE_NAME"
+          echo "Build concluído (simulação)."
 
-      - name: Build da imagem Docker
+  deploy-staging:
+    name: Deploy Staging
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/develop'
+    steps:
+      - name: Simular deploy Staging
         run: |
-          docker build -t cofre-digital:latest -f docker/Dockerfile .
+          echo "Iniciando deploy STAGING..."
+          echo "DB_HOST=${{ secrets.STAGING_DB_HOST }}" >> staging.env
+          echo "DB_USER=${{ secrets.STAGING_DB_USER }}" >> staging.env
+          echo "DB_PASSWORD=***MASKED***" >> staging.env
+          echo "EXTERNAL_API_KEY=***MASKED***" >> staging.env
+          echo "ENVIRONMENT=staging" >> staging.env
+          cat staging.env
 
-      - name: Login no Docker Hub
+  deploy-production:
+    name: Deploy Produção
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Simular deploy Produção
         run: |
-          echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+          echo "Iniciando deploy PRODUÇÃO..."
+          echo "DB_HOST=${{ secrets.PROD_DB_HOST }}" >> production.env
+          echo "DB_USER=${{ secrets.PROD_DB_USER }}" >> production.env
+          echo "DB_PASSWORD=***MASKED***" >> production.env
+          echo "EXTERNAL_API_KEY=***MASKED***" >> production.env
+          echo "ENVIRONMENT=production" >> production.env
+          cat production.env
 
-      - name: Push da imagem para o Docker Hub
+  security-check:
+    name: Verificação de Segurança
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+      - name: Verificar vazamentos de secrets
         run: |
-          docker tag cofre-digital:latest ${{ secrets.DOCKER_USERNAME }}/cofre-digital:latest
-          docker push ${{ secrets.DOCKER_USERNAME }}/cofre-digital:latest
-
-      - name: Deploy em Staging
-        if: github.ref == 'refs/heads/main'
-        env:
-          DB_HOST: ${{ secrets.STAGING_DB_HOST }}
-          DB_USER: ${{ secrets.STAGING_DB_USER }}
-          DB_PASSWORD: ${{ secrets.STAGING_DB_PASSWORD }}
-          API_KEY: ${{ secrets.STAGING_API_KEY }}
-        run: |
-          echo "Deploy em ambiente de STAGING com segurança"
-
-      - name: Deploy em Produção
-        if: github.ref == 'refs/heads/main'
-        env:
-          DB_HOST: ${{ secrets.PROD_DB_HOST }}
-          DB_USER: ${{ secrets.PROD_DB_USER }}
-          DB_PASSWORD: ${{ secrets.PROD_DB_PASSWORD }}
-          API_KEY: ${{ secrets.PROD_API_KEY }}
-        run: |
-          echo "Deploy em ambiente de PRODUÇÃO com segurança"
+          echo "Verificando se há secrets expostos..."
+          if grep -r "password.*=" app/ --exclude-dir=.git; then
+            echo "ATENÇÃO: senha hardcoded encontrada!"
+            exit 1
+          fi
+          if grep -r "api.*key.*=" app/ --exclude-dir=.git; then
+            echo "ATENÇÃO: API key hardcoded encontrada!"
+            exit 1
+          fi
+          echo "Nenhum secret exposto encontrado!"
